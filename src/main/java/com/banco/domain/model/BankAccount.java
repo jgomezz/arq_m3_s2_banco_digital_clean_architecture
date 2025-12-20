@@ -23,7 +23,7 @@ public class BankAccount {
     
     private String accountNumber;
     private String holderName;
-    private Money balance;
+    private Money balance;  //, VO
     private AccountStatus status;
     
     // Constructor para crear nueva cuenta
