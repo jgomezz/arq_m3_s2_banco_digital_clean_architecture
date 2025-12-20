@@ -2,15 +2,15 @@
 
 Sistema bancario simple que implementa **Domain-Driven Design (DDD)** y **Clean Architecture** con Spring Boot
 
-## ✨ Funcionalidades
+## Funcionalidades
 
-- ✅ Crear cuentas bancarias
-- ✅ Transferir dinero entre cuentas
-- ✅ Consultar saldo
-- ✅ Validación de saldo suficiente
-- ✅ **Notificaciones por consola**
+- Crear cuentas bancarias
+- Transferir dinero entre cuentas
+- Consultar saldo
+- Validación de saldo suficiente
+- Notificaciones por consola
 
-## 📁 Estructura del Proyecto
+## Estructura del Proyecto
 
 ```
 src/main/java/com/banco/
