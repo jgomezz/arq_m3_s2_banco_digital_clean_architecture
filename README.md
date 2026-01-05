@@ -13,44 +13,89 @@ Sistema bancario simple que implementa **Domain-Driven Design (DDD)** y **Clean 
 ## Estructura del Proyecto
 
 ```
-src/main/java/com/banco/
-├── domain/                          # CAPA 1: DOMAIN
-│   ├── model/
-│   │   ├── Money.java               ← @Getter, @EqualsAndHashCode
-│   │   ├── BankAccount.java         ← @Getter (sin @Setter públicos)
-│   │   └── TransferService.java
-│   ├── repository/
-│   │   └── AccountRepository.java
-│   └── exception/
-│
-├── application/                     # CAPA 2: APPLICATION
-│   ├── usecase/
-│   │   ├── CreateAccountUseCase.java       ← @RequiredArgsConstructor
-│   │   ├── TransferMoneyUseCase.java       ← @RequiredArgsConstructor
-│   │   └── GetBalanceUseCase.java          ← @RequiredArgsConstructor
-│   └── dto/
-│       ├── CreateAccountCommand.java       ← @Getter, @AllArgsConstructor
-│       └── TransferCommand.java            ← @Getter, @AllArgsConstructor
-│
-└── infrastructure/                  # CAPAS 3 y 4
-    ├── web/
-    │   ├── controller/
-    │   │   └── AccountController.java      ← @RequiredArgsConstructor
-    │   └── dto/
-    │       ├── CreateAccountRequest.java   ← @Data, @NoArgsConstructor
-    │       ├── TransferRequest.java        ← @Data, @NoArgsConstructor
-    │       └── AccountResponse.java        ← @Builder
-    ├── persistence/
-    │   ├── entity/
-    │   │   └── AccountEntity.java          ← @Data, @Builder
-    │   ├── repository/
-    │   │   └── JpaAccountRepository.java
-    │   ├── mapper/
-    │   │   └── AccountMapper.java          ← @Mapper (MapStruct)
-    │   └── adapter/
-    │       └── AccountRepositoryAdapter.java  ← @RequiredArgsConstructor
-    ├── notification/
-    │   └── ConsoleNotificationAdapter.java
-    └── config/
-        └── BeanConfiguration.java
+├── pom.xml
+├── README.md
+└── src
+    ├── main
+    │   ├── java
+    │   │   └── com
+    │   │       └── banco
+    │   │           ├── accounts
+    │   │           │   ├── application
+    │   │           │   │   ├── dto
+    │   │           │   │   │   └── CreateAccountCommand.java
+    │   │           │   │   └── usecase
+    │   │           │   │       ├── CreateAccountUseCase.java
+    │   │           │   │       └── GetBalanceUseCase.java
+    │   │           │   ├── domain
+    │   │           │   │   ├── exception
+    │   │           │   │   │   ├── AccountNotFoundException.java
+    │   │           │   │   │   └── InsufficientFundsException.java
+    │   │           │   │   ├── model
+    │   │           │   │   │   ├── AccountStatus.java
+    │   │           │   │   │   └── BankAccount.java
+    │   │           │   │   └── repository
+    │   │           │   │       └── AccountRepository.java
+    │   │           │   ├── infrastructure
+    │   │           │   │   ├── notification
+    │   │           │   │   │   └── ConsoleNotificationAdapter.java
+    │   │           │   │   ├── persistence
+    │   │           │   │   │   ├── adapter
+    │   │           │   │   │   │   └── AccountRepositoryAdapter.java
+    │   │           │   │   │   ├── entity
+    │   │           │   │   │   │   └── AccountEntity.java
+    │   │           │   │   │   ├── mapper
+    │   │           │   │   │   │   └── AccountMapper.java
+    │   │           │   │   │   └── repository
+    │   │           │   │   │       └── JpaAccountRepository.java
+    │   │           │   │   └── web
+    │   │           │   │       ├── controller
+    │   │           │   │       │   └── AccountController.java
+    │   │           │   │       └── dto
+    │   │           │   │           ├── AccountResponse.java
+    │   │           │   │           └── CreateAccountRequest.java
+    │   │           │   └── README.md
+    │   │           ├── BancoDigitalApplication.java
+    │   │           ├── shared
+    │   │           │   ├── domain
+    │   │           │   │   ├── exception
+    │   │           │   │   │   └── DomainException.java
+    │   │           │   │   └── model
+    │   │           │   │       └── Money.java
+    │   │           │   ├── infrastructure
+    │   │           │   │   └── config
+    │   │           │   │       └── BeanConfiguration.java
+    │   │           │   └── README.md
+    │   │           └── transactions
+    │   │               ├── application
+    │   │               │   ├── dto
+    │   │               │   │   └── TransferCommand.java
+    │   │               │   └── usecase
+    │   │               │       └── TransferMoneyUseCase.java
+    │   │               ├── domain
+    │   │               │   ├── model
+    │   │               │   │   └── Transfer.java
+    │   │               │   └── repository
+    │   │               ├── infrastructure
+    │   │               │   ├── persistence
+    │   │               │   └── web
+    │   │               │       ├── controller
+    │   │               │       │   └── TransactionController.java
+    │   │               │       └── dto
+    │   │               │           └── TransferRequest.java
+    │   │               └── README.md
+    │   └── resources
+    │       └── application.yml
+    └── test
+        └── java
+            └── com
+                └── banco
+                    ├── accounts
+                    │   └── domain
+                    │       └── model
+                    │           └── BankAccountTest.java
+                    └── shared
+                        └── domain
+                            └── model
+                                └── MoneyTest.java
 ```
