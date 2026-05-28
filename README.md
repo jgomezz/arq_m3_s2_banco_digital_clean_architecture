@@ -12,15 +12,21 @@ Sistema bancario simple que implementa **Domain-Driven Design (DDD)** y **Clean 
 
 ## Estructura del Proyecto
 
+Organizada por **subdominios** (`accounts`, `transactions`, `shared`). Cada subdominio sigue las tres capas de Clean Architecture (`domain/`, `application/`, `infrastructure/`). El subdominio `transactions` incluye además un paquete `infrastructure/acl/` que aloja el **Anti-Corruption Layer** hacia `accounts` (ver [ACL.md](ACL.md)).
+
 ```
 ├── pom.xml
 ├── README.md
+├── CLAUDE.md
+├── ACL.md
 └── src
     ├── main
     │   ├── java
     │   │   └── com
     │   │       └── banco
-    │   │           ├── accounts
+    │   │           ├── BancoDigitalApplication.java
+    │   │           │
+    │   │           ├── accounts                                 ← subdominio CORE
     │   │           │   ├── application
     │   │           │   │   ├── dto
     │   │           │   │   │   └── CreateAccountCommand.java
@@ -33,57 +39,57 @@ Sistema bancario simple que implementa **Domain-Driven Design (DDD)** y **Clean 
     │   │           │   │   │   └── InsufficientFundsException.java
     │   │           │   │   ├── model
     │   │           │   │   │   ├── AccountStatus.java
-    │   │           │   │   │   └── BankAccount.java
+    │   │           │   │   │   └── BankAccount.java            ← Aggregate Root
     │   │           │   │   └── repository
-    │   │           │   │       └── AccountRepository.java
-    │   │           │   ├── infrastructure
-    │   │           │   │   ├── notification
-    │   │           │   │   │   └── ConsoleNotificationAdapter.java
-    │   │           │   │   ├── persistence
-    │   │           │   │   │   ├── adapter
-    │   │           │   │   │   │   └── AccountRepositoryAdapter.java
-    │   │           │   │   │   ├── entity
-    │   │           │   │   │   │   └── AccountEntity.java
-    │   │           │   │   │   ├── mapper
-    │   │           │   │   │   │   └── AccountMapper.java
-    │   │           │   │   │   └── repository
-    │   │           │   │   │       └── JpaAccountRepository.java
-    │   │           │   │   └── web
-    │   │           │   │       ├── controller
-    │   │           │   │       │   └── AccountController.java
-    │   │           │   │       └── dto
-    │   │           │   │           ├── AccountResponse.java
-    │   │           │   │           └── CreateAccountRequest.java
-    │   │           │   └── README.md
-    │   │           ├── BancoDigitalApplication.java
-    │   │           ├── shared
-    │   │           │   ├── domain
-    │   │           │   │   ├── exception
-    │   │           │   │   │   └── DomainException.java
-    │   │           │   │   └── model
-    │   │           │   │       └── Money.java
-    │   │           │   ├── infrastructure
-    │   │           │   │   └── config
-    │   │           │   │       └── BeanConfiguration.java
-    │   │           │   └── README.md
-    │   │           └── transactions
-    │   │               ├── application
-    │   │               │   ├── dto
-    │   │               │   │   └── TransferCommand.java
-    │   │               │   └── usecase
-    │   │               │       └── TransferMoneyUseCase.java
+    │   │           │   │       └── AccountRepository.java      ← puerto (interface)
+    │   │           │   └── infrastructure
+    │   │           │       ├── persistence
+    │   │           │       │   ├── adapter
+    │   │           │       │   │   └── AccountRepositoryAdapter.java
+    │   │           │       │   ├── entity
+    │   │           │       │   │   └── AccountEntity.java      ← JPA, separado del dominio
+    │   │           │       │   ├── mapper
+    │   │           │       │   │   └── AccountMapper.java      ← MapStruct
+    │   │           │       │   └── repository
+    │   │           │       │       └── JpaAccountRepository.java
+    │   │           │       └── web
+    │   │           │           ├── controller
+    │   │           │           │   └── AccountController.java
+    │   │           │           └── dto
+    │   │           │               ├── AccountResponse.java
+    │   │           │               └── CreateAccountRequest.java
+    │   │           │
+    │   │           ├── transactions                             ← subdominio CORE
+    │   │           │   ├── application
+    │   │           │   │   ├── dto
+    │   │           │   │   │   └── TransferCommand.java
+    │   │           │   │   ├── port                             ← puertos consumidos
+    │   │           │   │   │   ├── AccountFundsPort.java        ← contrato hacia accounts
+    │   │           │   │   │   ├── AccountSnapshot.java         ← DTO inmutable (record)
+    │   │           │   │   │   └── NotificationPort.java
+    │   │           │   │   └── usecase
+    │   │           │   │       └── TransferMoneyUseCase.java    ← NO importa accounts/*
+    │   │           │   └── infrastructure
+    │   │           │       ├── acl                              ← ★ ANTI-CORRUPTION LAYER
+    │   │           │       │   └── AccountsContextAdapter.java  ← único puente con accounts
+    │   │           │       ├── notification
+    │   │           │       │   └── ConsoleNotificationAdapter.java
+    │   │           │       └── web
+    │   │           │           ├── controller
+    │   │           │           │   └── TransactionController.java
+    │   │           │           └── dto
+    │   │           │               └── TransferRequest.java
+    │   │           │
+    │   │           └── shared                                   ← subdominio SOPORTE
+    │   │               ├── README.md
     │   │               ├── domain
-    │   │               │   ├── model
-    │   │               │   │   └── Transfer.java
-    │   │               │   └── repository
-    │   │               ├── infrastructure
-    │   │               │   ├── persistence
-    │   │               │   └── web
-    │   │               │       ├── controller
-    │   │               │       │   └── TransactionController.java
-    │   │               │       └── dto
-    │   │               │           └── TransferRequest.java
-    │   │               └── README.md
+    │   │               │   ├── exception
+    │   │               │   │   └── DomainException.java
+    │   │               │   └── model
+    │   │               │       └── Money.java                   ← Value Object
+    │   │               └── infrastructure
+    │   │                   └── config
+    │   │                       └── BeanConfiguration.java       ← wiring manual de @Bean
     │   └── resources
     │       └── application.yml
     └── test
@@ -94,8 +100,18 @@ Sistema bancario simple que implementa **Domain-Driven Design (DDD)** y **Clean 
                     │   └── domain
                     │       └── model
                     │           └── BankAccountTest.java
-                    └── shared
-                        └── domain
-                            └── model
-                                └── MoneyTest.java
+                    ├── shared
+                    │   └── domain
+                    │       └── model
+                    │           └── MoneyTest.java
+                    └── transactions
+                        └── application
+                            └── usecase
+                                └── TransferMoneyUseCaseTest.java   ← usa fakes de los ports
 ```
+
+### Regla clave del ACL
+
+> Dentro del subdominio `transactions`, **solo** los archivos bajo `transactions/infrastructure/acl/` pueden importar de `com.banco.accounts.*`. Un import de `com.banco.accounts.*` en cualquier otro lugar de `transactions/` es una violación de diseño, no de estilo.
+
+Ver [ACL.md](ACL.md) para el diagrama de secuencia UML y la guía de extensión.
