@@ -1,13 +1,13 @@
-package com.banco.accounts.infrastructure.notification;
+package com.banco.transactions.infrastructure.notification;
 
-import com.banco.transactions.application.usecase.TransferMoneyUseCase;
+import com.banco.transactions.application.port.NotificationPort;
 import org.springframework.stereotype.Component;
 
 /**
  * ADAPTER: Implementa NotificationPort usando consola
  */
 @Component
-public class ConsoleNotificationAdapter implements TransferMoneyUseCase.NotificationPort {
+public class ConsoleNotificationAdapter implements NotificationPort {
     
     @Override
     public void notifyTransferSent(String holderName, String amount, 
