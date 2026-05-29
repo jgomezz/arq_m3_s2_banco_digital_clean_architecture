@@ -5,6 +5,7 @@ import com.banco.transactions.application.dto.TransferCommand;
 import com.banco.transactions.application.port.AccountFundsPort;
 import com.banco.transactions.application.port.AccountSnapshot;
 import com.banco.transactions.application.port.NotificationPort;
+import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -24,6 +25,22 @@ class TransferMoneyUseCaseTest {
         cuentas.put("BOB", new AccountSnapshot(
                 "BOB", "Bob", Money.of(new BigDecimal("500"), "USD")));
 
+        TransferMoneyUseCase useCase = getTransferMoneyUseCase(cuentas);
+
+        // ────────────── ACT ──────────────
+        TransferCommand cmd = new TransferCommand(
+                "ALICE", "BOB", new BigDecimal("200"), "USD");
+        useCase.execute(cmd);
+
+        // ────────────── ASSERT ──────────────
+        assertThat(cuentas.get("ALICE").balance().getAmount())
+                .isEqualByComparingTo("800");
+        assertThat(cuentas.get("BOB").balance().getAmount())
+                .isEqualByComparingTo("700");
+    }
+
+    @Nonnull
+    private static TransferMoneyUseCase getTransferMoneyUseCase(Map<String, AccountSnapshot> cuentas) {
         AccountFundsPort fakeAccountFundsPort = new AccountFundsPort() {
             @Override
             public AccountSnapshot lookup(String number) {
@@ -47,16 +64,6 @@ class TransferMoneyUseCaseTest {
 
         TransferMoneyUseCase useCase = new TransferMoneyUseCase(
                 fakeAccountFundsPort, fakeNotificationPort);
-
-        // ────────────── ACT ──────────────
-        TransferCommand cmd = new TransferCommand(
-                "ALICE", "BOB", new BigDecimal("200"), "USD");
-        useCase.execute(cmd);
-
-        // ────────────── ASSERT ──────────────
-        assertThat(cuentas.get("ALICE").balance().getAmount())
-                .isEqualByComparingTo("800");
-        assertThat(cuentas.get("BOB").balance().getAmount())
-                .isEqualByComparingTo("700");
+        return useCase;
     }
 }

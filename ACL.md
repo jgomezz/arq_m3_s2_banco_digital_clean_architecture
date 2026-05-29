@@ -1,49 +1,50 @@
-# Anti-Corruption Layer (ACL)
+# Capa Anticorrupción (ACL)
 
-This document summarizes how the **Anti-Corruption Layer** is implemented between the `transactions` and `accounts` subdomains in this project.
+Este documento resume cómo está implementada la **Capa Anticorrupción** entre los subdominios `transactions` y `accounts` en este proyecto.
 
-## Why an ACL?
+## ¿Por qué una ACL?
 
-`transactions` needs balances and the ability to move funds, both of which live in `accounts`. Without an ACL, the transactions code would import `BankAccount`, `AccountRepository`, and `AccountNotFoundException` directly — coupling the two subdomains so that any change in `accounts` ripples into `transactions`.
+`transactions` necesita los saldos y la capacidad de mover fondos, ambos viven en `accounts`. Sin una ACL, el código de transactions importaría `BankAccount`, `AccountRepository` y `AccountNotFoundException` directamente, acoplando ambos subdominios de manera que cualquier cambio en `accounts` se propagaría a `transactions`.
 
-The ACL prevents that coupling: `transactions` expresses what it needs **in its own vocabulary** (a port + a snapshot), and a single adapter translates between that vocabulary and the real `accounts` types.
+La ACL evita ese acoplamiento: `transactions` expresa lo que necesita **en su propio vocabulario** (un puerto + un snapshot), y un único adaptador traduce entre ese vocabulario y los tipos reales de `accounts`.
 
-## The pieces
+## Las piezas
 
-| Role                 | Type                                                                                         | Location                                              |
-| -------------------- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| Port (interface)     | `AccountFundsPort`                                                                           | `transactions/application/port/`                      |
-| Snapshot (read DTO)  | `AccountSnapshot` (`record`)                                                                 | `transactions/application/port/`                      |
-| Adapter (the ACL)    | `AccountsContextAdapter implements AccountFundsPort`                                         | `transactions/infrastructure/acl/`                    |
-| Consumer (use case)  | `TransferMoneyUseCase`                                                                       | `transactions/application/usecase/`                   |
-| Wiring               | `accountFundsPort(...)` `@Bean`                                                              | `shared/infrastructure/config/BeanConfiguration.java` |
+| Rol                    | Tipo                                                                                       | Ubicación                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| Puerto (interfaz)      | `AccountFundsPort`                                                                         | `transactions/application/port/`                      |
+| Snapshot (DTO de lectura) | `AccountSnapshot` (`record`)                                                            | `transactions/application/port/`                      |
+| Adaptador (la ACL)     | `AccountsContextAdapter implements AccountFundsPort`                                       | `transactions/infrastructure/acl/`                    |
+| Consumidor (caso de uso) | `TransferMoneyUseCase`                                                                   | `transactions/application/usecase/`                   |
+| Cableado               | `accountFundsPort(...)` `@Bean`                                                            | `shared/infrastructure/config/BeanConfiguration.java` |
 
 ```
 ┌─────────────────────────── transactions ───────────────────────────┐
 │                                                                    │
 │  TransferMoneyUseCase ──► AccountFundsPort ──► AccountSnapshot     │
 │                                  ▲                                 │
-│                                  │ implements                      │
+│                                  │ implementa                      │
 │                                  │                                 │
-│                  AccountsContextAdapter  (ACL, only file allowed   │
-│                                  │       to import from accounts/) │
+│                  AccountsContextAdapter  (ACL, único archivo       │
+│                                  │       autorizado a importar     │
+│                                  │       desde accounts/)          │
 └──────────────────────────────────┼─────────────────────────────────┘
-                                   │ uses
+                                   │ usa
                                    ▼
 ┌─────────────────────────── accounts ───────────────────────────────┐
 │  AccountRepository · BankAccount · AccountNotFoundException        │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-## The load-bearing rule
+## La regla fundamental
 
-Inside the `transactions` subdomain, **only** files under `transactions/infrastructure/acl/` are allowed to import from `com.banco.accounts.*`. An import of `com.banco.accounts.*` anywhere else in `transactions/` is a design violation, not a stylistic one.
+Dentro del subdominio `transactions`, **solo** los archivos bajo `transactions/infrastructure/acl/` están autorizados a importar desde `com.banco.accounts.*`. Una importación de `com.banco.accounts.*` en cualquier otro lugar de `transactions/` es una violación de diseño, no un asunto estilístico.
 
-The reverse is stricter: `accounts` must **not** import anything from `com.banco.transactions.*` at all.
+La regla inversa es más estricta: `accounts` **no** debe importar nada de `com.banco.transactions.*` en absoluto.
 
-## What the port exposes
+## Qué expone el puerto
 
-`AccountFundsPort` is written in the *transactions* vocabulary, not the *accounts* vocabulary:
+`AccountFundsPort` está escrito en el vocabulario de *transactions*, no en el de *accounts*:
 
 ```java
 public interface AccountFundsPort {
@@ -52,41 +53,48 @@ public interface AccountFundsPort {
 }
 ```
 
-`AccountSnapshot` is an immutable `record` containing only the fields transactions actually needs (`accountNumber`, `holderName`, `balance`). It is **not** `BankAccount` — the aggregate never crosses the boundary.
+`AccountSnapshot` es un `record` inmutable que contiene únicamente los campos que transactions realmente necesita (`accountNumber`, `holderName`, `balance`). **No** es `BankAccount`: el agregado nunca cruza la frontera.
 
-## What the adapter does
+## Qué hace el adaptador
 
-`AccountsContextAdapter` is the single bridge. It:
+`AccountsContextAdapter` es el único puente. Este:
 
-1. Resolves account numbers to `BankAccount` aggregates via `AccountRepository`.
-2. Translates "account not found" from `AccountNotFoundException` (an *accounts* exception) into the same exception type re-thrown at the boundary — the use case never catches an accounts-specific type directly.
-3. Maps `BankAccount` → `AccountSnapshot` before returning it to the use case.
-4. Hosts the **cross-aggregate** validations that don't belong on a single aggregate:
-   - reject transfer to the same account,
-   - reject transfer between accounts with different currencies.
-5. Calls `BankAccount.debit` / `credit` and persists both aggregates.
+1. Resuelve los números de cuenta a agregados `BankAccount` mediante `AccountRepository`.
+2. Traduce "cuenta no encontrada" desde `AccountNotFoundException` (una excepción de *accounts*) al mismo tipo de excepción relanzada en la frontera: el caso de uso nunca captura directamente un tipo específico de accounts.
+3. Mapea `BankAccount` → `AccountSnapshot` antes de devolverlo al caso de uso.
+4. Aloja las validaciones **entre agregados** que no pertenecen a un único agregado:
+   - rechazar transferencia a la misma cuenta,
+   - rechazar transferencia entre cuentas con monedas distintas.
+5. Llama a `BankAccount.debit` / `credit` y persiste ambos agregados.
 
-## Sequence diagram — `POST /api/transactions/transfer`
+## Diagrama de secuencia — `POST /api/transactions/transfer`
 
-The diagram below traces a full transfer request and makes the ACL boundary explicit.
-Everything inside the dashed box is the `transactions` subdomain; everything outside it is `accounts`. The only crossings occur inside `AccountsContextAdapter`.
+El diagrama a continuación traza una solicitud completa de transferencia y hace explícita la frontera de la ACL.
+Todo lo que está dentro del recuadro punteado es el subdominio `transactions`; todo lo que está fuera es `accounts`. Los únicos cruces ocurren dentro de `AccountsContextAdapter`.
 
 ```plantuml
-@startuml ACL Pattern - Transfer Money
+@startuml
 title Anti-Corruption Layer — POST /api/transactions/transfer
 
+<style>
+sequenceDiagram {
+  .participant {
+    Padding 8
+  }
+}
+</style>
+
 skinparam sequenceMessageAlign center
-skinparam ParticipantPadding 8
 skinparam BoxPadding 10
 
 actor Client
 
 box "transactions subdomain" #F5F5F5
-    boundary "TransactionController"          as Ctrl
-    control  "TransferMoneyUseCase"           as UC
-    interface "AccountFundsPort\n<<port>>"    as Port
-    interface "NotificationPort\n<<port>>"    as Notif
-    participant "AccountsContextAdapter\n<<ACL adapter>>" as ACL
+    boundary    "TransactionController"                    as Ctrl
+    control     "TransferMoneyUseCase"                     as UC
+    participant "AccountFundsPort\n<<port>>"               as Port
+    participant "NotificationPort\n<<port>>"               as Notif
+    participant "AccountsContextAdapter\n<<ACL adapter>>"  as ACL
 end box
 
 box "accounts subdomain" #EBF5FF
@@ -100,7 +108,6 @@ Ctrl -> UC : execute(TransferCommand)
 activate UC
 
 == 1) Pre-transfer lookup (transactions vocabulary) ==
-
 UC   -> Port : lookup(fromAccountNumber)
 Port -> ACL  : lookup(from)
 activate ACL
@@ -116,11 +123,9 @@ ACL  -> Repo : findByAccountNumber(to)
 Repo --> ACL : Optional<BankAccount>
 ACL  --> UC  : AccountSnapshot(to)
 deactivate ACL
-
 note over UC : amount := Money.of(...)
 
 == 2) Move funds (ACL hosts cross-aggregate rules) ==
-
 UC   -> Port : moveFunds(from, to, Money)
 Port -> ACL  : moveFunds(from, to, Money)
 activate ACL
@@ -128,13 +133,11 @@ ACL  -> Repo : findByAccountNumber(from)
 Repo --> ACL : BankAccount(from)
 ACL  -> Repo : findByAccountNumber(to)
 Repo --> ACL : BankAccount(to)
-
 note right of ACL
   Cross-aggregate validations:
   • reject same-account transfer
   • reject currency mismatch
 end note
-
 ACL  -> Acc  : from.debit(Money)
 ACL  -> Acc  : to.credit(Money)
 ACL  -> Repo : save(from)
@@ -143,50 +146,46 @@ ACL  --> UC  : void
 deactivate ACL
 
 == 3) Post-transfer lookup + notify ==
-
 UC   -> Port : lookup(from)
 Port -> ACL  : lookup(from)
 ACL  --> UC  : AccountSnapshot(from, newBalance)
-
 UC   -> Port : lookup(to)
 Port -> ACL  : lookup(to)
 ACL  --> UC  : AccountSnapshot(to, newBalance)
-
 UC   -> Notif : notifyTransferSent(...)
 UC   -> Notif : notifyTransferReceived(...)
-
 UC   --> Ctrl
 deactivate UC
+
 Ctrl --> Client : 200 OK "Transfer completed successfully"
 deactivate Ctrl
-
 @enduml
 ```
 
-> **Rendering:** the snippet above is **PlantUML** (a UML 2.x dialect).
-> In IntelliJ install the *PlantUML Integration* plugin, or paste into <https://www.plantuml.com/plantuml/uml/> to view.
+> **Renderizado:** el fragmento anterior está en **PlantUML** (un dialecto de UML 2.x).
+> En IntelliJ instala el plugin *PlantUML Integration*, o pégalo en <https://www.plantuml.com/plantuml/uml/> para visualizarlo.
 
-Key things the diagram makes visible:
+Aspectos clave que el diagrama hace visibles:
 
-- `TransferMoneyUseCase` talks **only** to `AccountFundsPort` and `NotificationPort`. It never sees `BankAccount`, `AccountRepository`, or any `accounts` exception.
-- The arrows that *actually* cross from `transactions` into `accounts` all originate inside `AccountsContextAdapter` — that is the ACL.
-- Cross-aggregate validations (same-account, same-currency) are placed in `moveFunds`, not in the use case and not on `BankAccount`.
-- The post-transfer `lookup` calls (step 3) are how the use case obtains the updated balances for notification without ever touching the aggregate directly.
+- `TransferMoneyUseCase` se comunica **únicamente** con `AccountFundsPort` y `NotificationPort`. Nunca ve `BankAccount`, `AccountRepository` ni ninguna excepción de `accounts`.
+- Las flechas que *realmente* cruzan desde `transactions` hacia `accounts` se originan todas dentro de `AccountsContextAdapter`: esa es la ACL.
+- Las validaciones entre agregados (misma cuenta, misma moneda) se ubican en `moveFunds`, no en el caso de uso ni en `BankAccount`.
+- Las llamadas a `lookup` posteriores a la transferencia (paso 3) son la forma en que el caso de uso obtiene los saldos actualizados para la notificación sin tocar nunca el agregado directamente.
 
-## How the use case stays clean
+## Cómo se mantiene limpio el caso de uso
 
-`TransferMoneyUseCase` depends on `AccountFundsPort` and `NotificationPort` only — it knows nothing about `BankAccount`, `AccountRepository`, JPA, or H2. The transfer flow is:
+`TransferMoneyUseCase` depende únicamente de `AccountFundsPort` y `NotificationPort`: no sabe nada sobre `BankAccount`, `AccountRepository`, JPA o H2. El flujo de transferencia es:
 
 ```
 lookup(from)  →  lookup(to)  →  moveFunds(from, to, amount)
               →  lookup(from)  →  lookup(to)  →  notify
 ```
 
-The re-`lookup` after `moveFunds` is how the use case obtains post-transfer balances without ever touching the aggregate.
+El `lookup` repetido después de `moveFunds` es la forma en que el caso de uso obtiene los saldos posteriores a la transferencia sin tocar nunca el agregado.
 
-## Wiring
+## Cableado
 
-Use cases are not auto-discovered with `@Service`; they are registered manually so the application layer stays framework-free. In `BeanConfiguration`:
+Los casos de uso no se descubren automáticamente con `@Service`; se registran manualmente para que la capa de aplicación se mantenga libre de framework. En `BeanConfiguration`:
 
 ```java
 @Bean
@@ -202,19 +201,19 @@ public TransferMoneyUseCase transferMoneyUseCase(
 }
 ```
 
-Note that `transferMoneyUseCase` receives the **port**, not `AccountRepository` — Spring would happily inject either, but injecting the port is what enforces the architectural rule at the wiring level.
+Nótese que `transferMoneyUseCase` recibe el **puerto**, no `AccountRepository`: Spring inyectaría cualquiera de los dos sin problema, pero inyectar el puerto es lo que hace cumplir la regla arquitectónica a nivel del cableado.
 
-## Testing across the boundary
+## Pruebas a través de la frontera
 
-Because the use case depends on an interface, tests substitute the port with a hand-rolled in-memory fake instead of Mockito (see `TransferMoneyUseCaseTest`). The test exercises the use case's orchestration logic without booting Spring, JPA, or the ACL adapter itself.
+Dado que el caso de uso depende de una interfaz, las pruebas sustituyen el puerto con un fake en memoria hecho a mano en lugar de Mockito (ver `TransferMoneyUseCaseTest`). La prueba ejercita la lógica de orquestación del caso de uso sin arrancar Spring, JPA o el propio adaptador ACL.
 
-## How to extend the ACL
+## Cómo extender la ACL
 
-When a new transactions feature needs more data or behavior from accounts, **do not** add an import — instead:
+Cuando una nueva funcionalidad de transactions necesite más datos o comportamiento de accounts, **no** agregues una importación; en su lugar:
 
-1. Add the method to `AccountFundsPort` in the transactions vocabulary.
-2. Add any new fields to `AccountSnapshot` (or introduce a new snapshot record) — still in transactions terms.
-3. Implement the new method in `AccountsContextAdapter`, doing the translation there.
-4. Leave the use case talking to the port.
+1. Agrega el método a `AccountFundsPort` en el vocabulario de transactions.
+2. Agrega los nuevos campos a `AccountSnapshot` (o introduce un nuevo record de snapshot), siempre en términos de transactions.
+3. Implementa el nuevo método en `AccountsContextAdapter`, realizando la traducción allí.
+4. Deja que el caso de uso siga comunicándose con el puerto.
 
-If accounts later renames `BankAccount`, splits the aggregate, or swaps its persistence strategy, **only `AccountsContextAdapter` should need to change**. That is the whole point of the ACL.
+Si más adelante accounts renombra `BankAccount`, divide el agregado o cambia su estrategia de persistencia, **solo `AccountsContextAdapter` debería necesitar cambios**. Ese es todo el propósito de la ACL.
