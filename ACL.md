@@ -8,7 +8,7 @@ Este documento resume cómo está implementada la **Capa Anticorrupción** entre
 
 La ACL evita ese acoplamiento: `transactions` expresa lo que necesita **en su propio vocabulario** (un puerto + un snapshot), y un único adaptador traduce entre ese vocabulario y los tipos reales de `accounts`.
 
-## Las piezas
+## Los elementos involucrados
 
 | Rol                    | Tipo                                                                                       | Ubicación                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
@@ -16,25 +16,8 @@ La ACL evita ese acoplamiento: `transactions` expresa lo que necesita **en su pr
 | Snapshot (DTO de lectura) | `AccountSnapshot` (`record`)                                                            | `transactions/application/port/`                      |
 | Adaptador (la ACL)     | `AccountsContextAdapter implements AccountFundsPort`                                       | `transactions/infrastructure/acl/`                    |
 | Consumidor (caso de uso) | `TransferMoneyUseCase`                                                                   | `transactions/application/usecase/`                   |
-| Cableado               | `accountFundsPort(...)` `@Bean`                                                            | `shared/infrastructure/config/BeanConfiguration.java` |
+| Configuración de beans | `accountFundsPort(...)` `@Bean`                                                            | `shared/infrastructure/config/BeanConfiguration.java` |
 
-```
-┌─────────────────────────── transactions ───────────────────────────┐
-│                                                                    │
-│  TransferMoneyUseCase ──► AccountFundsPort ──► AccountSnapshot     │
-│                                  ▲                                 │
-│                                  │ implementa                      │
-│                                  │                                 │
-│                  AccountsContextAdapter  (ACL, único archivo       │
-│                                  │       autorizado a importar     │
-│                                  │       desde accounts/)          │
-└──────────────────────────────────┼─────────────────────────────────┘
-                                   │ usa
-                                   ▼
-┌─────────────────────────── accounts ───────────────────────────────┐
-│  AccountRepository · BankAccount · AccountNotFoundException        │
-└────────────────────────────────────────────────────────────────────┘
-```
 
 ## La regla fundamental
 
@@ -95,7 +78,7 @@ lookup(from)  →  lookup(to)  →  moveFunds(from, to, amount)
 
 El `lookup` repetido después de `moveFunds` es la forma en que el caso de uso obtiene los saldos posteriores a la transferencia sin tocar nunca el agregado.
 
-## Cableado
+## Configuración de beans
 
 Los casos de uso no se descubren automáticamente con `@Service`; se registran manualmente para que la capa de aplicación se mantenga libre de framework. En `BeanConfiguration`:
 
@@ -113,9 +96,9 @@ public TransferMoneyUseCase transferMoneyUseCase(
 }
 ```
 
-Nótese que `transferMoneyUseCase` recibe el **puerto**, no `AccountRepository`: Spring inyectaría cualquiera de los dos sin problema, pero inyectar el puerto es lo que hace cumplir la regla arquitectónica a nivel del cableado.
+Nótese que `transferMoneyUseCase` recibe el **puerto**, no `AccountRepository`: Spring inyectaría cualquiera de los dos sin problema, pero inyectar el puerto es lo que hace cumplir la regla arquitectónica a nivel de la configuración de beans.
 
-## Pruebas a través de la frontera
+## Pruebas
 
 Dado que el caso de uso depende de una interfaz, las pruebas sustituyen el puerto con un fake en memoria hecho a mano en lugar de Mockito (ver `TransferMoneyUseCaseTest`). La prueba ejercita la lógica de orquestación del caso de uso sin arrancar Spring, JPA o el propio adaptador ACL.
 
