@@ -72,98 +72,10 @@ public interface AccountFundsPort {
 El diagrama a continuación traza una solicitud completa de transferencia y hace explícita la frontera de la ACL.
 Todo lo que está dentro del recuadro punteado es el subdominio `transactions`; todo lo que está fuera es `accounts`. Los únicos cruces ocurren dentro de `AccountsContextAdapter`.
 
-```plantuml
-@startuml
-title Anti-Corruption Layer — POST /api/transactions/transfer
+![Anti-Corruption Layer sequence diagram](acl/acl.png)
 
-<style>
-sequenceDiagram {
-  .participant {
-    Padding 8
-  }
-}
-</style>
-
-skinparam sequenceMessageAlign center
-skinparam BoxPadding 10
-
-actor Client
-
-box "transactions subdomain" #F5F5F5
-    boundary    "TransactionController"                    as Ctrl
-    control     "TransferMoneyUseCase"                     as UC
-    participant "AccountFundsPort\n<<port>>"               as Port
-    participant "NotificationPort\n<<port>>"               as Notif
-    participant "AccountsContextAdapter\n<<ACL adapter>>"  as ACL
-end box
-
-box "accounts subdomain" #EBF5FF
-    entity "AccountRepository\n<<repository>>" as Repo
-    entity "BankAccount\n<<aggregate root>>"   as Acc
-end box
-
-Client -> Ctrl : POST /api/transactions/transfer\n(TransferRequest)
-activate Ctrl
-Ctrl -> UC : execute(TransferCommand)
-activate UC
-
-== 1) Pre-transfer lookup (transactions vocabulary) ==
-UC   -> Port : lookup(fromAccountNumber)
-Port -> ACL  : lookup(from)
-activate ACL
-ACL  -> Repo : findByAccountNumber(from)
-Repo --> ACL : Optional<BankAccount>
-ACL  --> UC  : AccountSnapshot(from)
-deactivate ACL
-
-UC   -> Port : lookup(toAccountNumber)
-Port -> ACL  : lookup(to)
-activate ACL
-ACL  -> Repo : findByAccountNumber(to)
-Repo --> ACL : Optional<BankAccount>
-ACL  --> UC  : AccountSnapshot(to)
-deactivate ACL
-note over UC : amount := Money.of(...)
-
-== 2) Move funds (ACL hosts cross-aggregate rules) ==
-UC   -> Port : moveFunds(from, to, Money)
-Port -> ACL  : moveFunds(from, to, Money)
-activate ACL
-ACL  -> Repo : findByAccountNumber(from)
-Repo --> ACL : BankAccount(from)
-ACL  -> Repo : findByAccountNumber(to)
-Repo --> ACL : BankAccount(to)
-note right of ACL
-  Cross-aggregate validations:
-  • reject same-account transfer
-  • reject currency mismatch
-end note
-ACL  -> Acc  : from.debit(Money)
-ACL  -> Acc  : to.credit(Money)
-ACL  -> Repo : save(from)
-ACL  -> Repo : save(to)
-ACL  --> UC  : void
-deactivate ACL
-
-== 3) Post-transfer lookup + notify ==
-UC   -> Port : lookup(from)
-Port -> ACL  : lookup(from)
-ACL  --> UC  : AccountSnapshot(from, newBalance)
-UC   -> Port : lookup(to)
-Port -> ACL  : lookup(to)
-ACL  --> UC  : AccountSnapshot(to, newBalance)
-UC   -> Notif : notifyTransferSent(...)
-UC   -> Notif : notifyTransferReceived(...)
-UC   --> Ctrl
-deactivate UC
-
-Ctrl --> Client : 200 OK "Transfer completed successfully"
-deactivate Ctrl
-@enduml
-```
-
-> **Renderizado:** el fragmento anterior está en **PlantUML** (un dialecto de UML 2.x).
-> En IntelliJ instala el plugin *PlantUML Integration*, o pégalo en <https://www.plantuml.com/plantuml/uml/> para visualizarlo.
+> **Fuente:** el código PlantUML del diagrama está en [`acl/acl.puml`](acl/acl.puml).
+> Para regenerar la imagen, instala el plugin *PlantUML Integration* en IntelliJ, o pega el contenido del archivo en <https://www.plantuml.com/plantuml/uml/>.
 
 Aspectos clave que el diagrama hace visibles:
 
